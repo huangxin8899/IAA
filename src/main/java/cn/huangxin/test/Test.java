@@ -4,8 +4,6 @@ import cn.huangxin.iaa.core.AnnotationConfigApplicationContext;
 
 /**
  * @author 黄鑫
- * @version 1.0
- * @date 2022/10/10 10:27
  * @description: 测试类
  */
 public class Test {
