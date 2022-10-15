@@ -1,5 +1,6 @@
 package cn.huangxin.iaa.core;
 
+import cn.huangxin.iaa.annotation.Autowired;
 import cn.huangxin.iaa.annotation.Component;
 import cn.huangxin.iaa.annotation.ComponentScan;
 import cn.huangxin.iaa.annotation.Scope;
@@ -7,8 +8,7 @@ import cn.huangxin.iaa.util.FileUtil;
 
 import java.beans.Introspector;
 import java.io.File;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.Parameter;
+import java.lang.reflect.*;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
@@ -153,9 +153,11 @@ public class AnnotationConfigApplicationContext {
     }
 
     private Object createBean(BeanDefinition beanDefinition) {
-        // 创建对象
         try {
+            // 创建对象
             Object bean = createBeanInstance(beanDefinition);
+            // 依赖注入
+            populateBean(beanDefinition, bean);
             return bean;
         } catch (Throwable e) {
             throw new RuntimeException(e);
@@ -180,5 +182,33 @@ public class AnnotationConfigApplicationContext {
             args[i] = getBean(parameter.getName());
         }
         return constructor.newInstance(args);
+    }
+
+    private void populateBean(BeanDefinition beanDefinition, Object bean) throws InvocationTargetException, IllegalAccessException {
+        Class<?> type = beanDefinition.getType();
+        // 解析方法上的Autowired
+        for (Method method : type.getDeclaredMethods()) {
+            if (method.isAnnotationPresent(Autowired.class)) {
+                int parameterCount = method.getParameterCount();
+                if (parameterCount == 0) {
+                    method.invoke(bean);
+                    continue;
+                }
+                Object[] args = new Object[parameterCount];
+                Parameter[] parameters = method.getParameters();
+                for (int i = 0; i < parameters.length; i++) {
+                    Parameter parameter = parameters[i];
+                    args[i] = getBean(parameter.getName());
+                }
+                method.invoke(bean, args);
+            }
+        }
+        // 解析字段上的 Autowired
+        for (Field field : type.getDeclaredFields()) {
+            if (field.isAnnotationPresent(Autowired.class)) {
+                field.setAccessible(true);
+                field.set(bean, getBean(field.getName()));
+            }
+        }
     }
 }
