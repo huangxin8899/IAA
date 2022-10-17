@@ -9,7 +9,6 @@ import cn.huangxin.iaa.util.FileUtil;
 import java.beans.Introspector;
 import java.io.File;
 import java.lang.reflect.*;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +30,7 @@ public class AnnotationConfigApplicationContext {
     /**
      * 后置处理器集合
      */
-    private final List<BeanPostProcessor> postProcessorList = new ArrayList<>();
+    private final List<BeanPostProcessor> beanPostProcessorList = new ArrayList<>();
 
     /**
      * 一级缓存（存放bean对象或代理对象）
@@ -111,7 +110,7 @@ public class AnnotationConfigApplicationContext {
         beanDefinitionMap.forEach((beanName, beanDefinition) -> {
             if (BeanPostProcessor.class.isAssignableFrom(beanDefinition.getType())) {
                 BeanPostProcessor beanPostProcessor = (BeanPostProcessor) getBean(beanName);
-                postProcessorList.add(beanPostProcessor);
+                beanPostProcessorList.add(beanPostProcessor);
             }
         });
     }
@@ -142,27 +141,30 @@ public class AnnotationConfigApplicationContext {
             // 单例
             Object singletonBean = singletonObjects.get(beanName);
             if (singletonBean == null) {
-                singletonBean = createBean(beanDefinition);
+                singletonBean = createBean(beanName, beanDefinition);
                 singletonObjects.put(beanName, singletonBean);
             }
             return singletonBean;
         } else {
             // 多例
-            return createBean(beanDefinition);
+            return createBean(beanName, beanDefinition);
         }
     }
 
-    private Object createBean(BeanDefinition beanDefinition) {
+    private Object createBean(String beanName, BeanDefinition beanDefinition) {
         try {
             // 创建对象
             Object bean = createBeanInstance(beanDefinition);
             // 依赖注入
             populateBean(beanDefinition, bean);
+            // 初始化阶段
+            initializeBean(beanName, bean);
             return bean;
         } catch (Throwable e) {
             throw new RuntimeException(e);
         }
     }
+
 
     private Object createBeanInstance(BeanDefinition beanDefinition) throws Throwable {
         Class<?> clazz = beanDefinition.getType();
@@ -186,6 +188,14 @@ public class AnnotationConfigApplicationContext {
 
     private void populateBean(BeanDefinition beanDefinition, Object bean) throws InvocationTargetException, IllegalAccessException {
         Class<?> type = beanDefinition.getType();
+        // 解析字段上的 Autowired
+        for (Field field : type.getDeclaredFields()) {
+            if (field.isAnnotationPresent(Autowired.class)) {
+                field.setAccessible(true);
+                field.set(bean, getBean(field.getName()));
+            }
+        }
+
         // 解析方法上的Autowired
         for (Method method : type.getDeclaredMethods()) {
             if (method.isAnnotationPresent(Autowired.class)) {
@@ -203,12 +213,32 @@ public class AnnotationConfigApplicationContext {
                 method.invoke(bean, args);
             }
         }
-        // 解析字段上的 Autowired
-        for (Field field : type.getDeclaredFields()) {
-            if (field.isAnnotationPresent(Autowired.class)) {
-                field.setAccessible(true);
-                field.set(bean, getBean(field.getName()));
-            }
+
+    }
+
+    /**
+     * 初始化阶段 aware -> 初始化前 -> 初始化 -> 初始化后
+     */
+    private Object initializeBean(String beanName, Object bean) {
+        // aware回调
+        if (bean instanceof BeanNameAware) {
+            ((BeanNameAware) bean).setBeanName(beanName);
         }
+
+        // 初始化前
+        for (BeanPostProcessor beanPostProcessor : beanPostProcessorList) {
+            bean = beanPostProcessor.postProcessBeforeInitialization(bean, beanName);
+        }
+
+        // 初始化
+        if (bean instanceof InitializingBean) {
+            ((InitializingBean) bean).afterPropertiesSet();
+        }
+
+        // 初始化后
+        for (BeanPostProcessor beanPostProcessor : beanPostProcessorList) {
+            bean = beanPostProcessor.postProcessAfterInitialization(bean, beanName);
+        }
+        return bean;
     }
 }
