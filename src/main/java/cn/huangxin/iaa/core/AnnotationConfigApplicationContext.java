@@ -10,6 +10,7 @@ import java.beans.Introspector;
 import java.io.File;
 import java.lang.reflect.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,10 +34,19 @@ public class AnnotationConfigApplicationContext {
     private final List<BeanPostProcessor> beanPostProcessorList = new ArrayList<>();
 
     /**
-     * 一级缓存（存放bean对象或代理对象）
+     * 一级缓存（单例池，存放成品bean）
      */
     private final Map<String, Object> singletonObjects = new ConcurrentHashMap<>(256);
 
+    /**
+     * 二级缓存（存放半成品bean）
+     */
+    private final Map<String, Object> earlySingletonObjects = new HashMap<>(16);
+
+    /**
+     * 三级缓存（存放刚实例化的bean）
+     */
+    private final Map<String, ObjectFactory<?>> singletonFactories = new HashMap<>(16);
 
 
     public AnnotationConfigApplicationContext(Class<?> configClass) {
@@ -139,12 +149,15 @@ public class AnnotationConfigApplicationContext {
         }
         if (beanDefinition.isSingleton()) {
             // 单例
-            Object singletonBean = singletonObjects.get(beanName);
-            if (singletonBean == null) {
-                singletonBean = createBean(beanName, beanDefinition);
-                singletonObjects.put(beanName, singletonBean);
+            Object singletonObject = getSingleton(beanName, true);
+            // 三处缓存都没找到，表示还未实例化
+            if (singletonObject == null) {
+                singletonObject = createBean(beanName, beanDefinition);
+                this.singletonObjects.put(beanName, singletonObject);
+                this.earlySingletonObjects.remove(beanName);
+                this.singletonFactories.remove(beanName);
             }
-            return singletonBean;
+            return singletonObject;
         } else {
             // 多例
             return createBean(beanName, beanDefinition);
@@ -155,11 +168,24 @@ public class AnnotationConfigApplicationContext {
         try {
             // 创建对象
             Object bean = createBeanInstance(beanDefinition);
+            // 若是单例模式，将ObjectFactory放到三级缓存
+            if (beanDefinition.isSingleton()) {
+                this.singletonFactories.put(beanName, new DefaultSingletonFactory(bean));
+            }
             // 依赖注入
             populateBean(beanDefinition, bean);
             // 初始化阶段
-            initializeBean(beanName, bean);
-            return bean;
+            Object initializeBean = initializeBean(beanName, bean);
+
+            // 查看bean是否在二级缓存，如果在则说明发送循环依赖了
+            // 这里主要作用是把代理对象返回（这里可能是代理对象，也有可能是原始对象）
+            if (beanDefinition.isSingleton()) {
+                Object earlySingletonReference = getSingleton(beanName, false);
+                if (earlySingletonReference != null) {
+                    initializeBean = earlySingletonReference;
+                }
+            }
+            return initializeBean;
         } catch (Throwable e) {
             throw new RuntimeException(e);
         }
@@ -240,5 +266,24 @@ public class AnnotationConfigApplicationContext {
             bean = beanPostProcessor.postProcessAfterInitialization(bean, beanName);
         }
         return bean;
+    }
+
+    private Object getSingleton(String beanName, boolean allowEarlyReference) {
+        // 一级缓存
+        Object singletonObject = this.singletonObjects.get(beanName);
+        if (singletonObject == null) {
+            // 二级缓存
+            singletonObject = this.earlySingletonObjects.get(beanName);
+            if (singletonObject == null && allowEarlyReference) {
+                // 三级缓存
+                ObjectFactory<?> objectFactory = this.singletonFactories.get(beanName);
+                if (objectFactory != null) {
+                    singletonObject = objectFactory.getObject();
+                    this.earlySingletonObjects.put(beanName, singletonObject);
+                    this.singletonFactories.remove(beanName);
+                }
+            }
+        }
+        return singletonObject;
     }
 }

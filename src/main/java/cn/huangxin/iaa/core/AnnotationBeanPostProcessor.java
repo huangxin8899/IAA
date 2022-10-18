@@ -7,13 +7,13 @@ package cn.huangxin.iaa.core;
 public class AnnotationBeanPostProcessor implements BeanPostProcessor {
     @Override
     public Object postProcessBeforeInitialization(Object bean, String beanName) {
-        System.out.println(beanName + "执行postProcessBeforeInitialization");
+        System.out.println(beanName + "执行内置Bean后置处理器postProcessBeforeInitialization");
         return BeanPostProcessor.super.postProcessBeforeInitialization(bean, beanName);
     }
 
     @Override
     public Object postProcessAfterInitialization(Object bean, String beanName) {
-        System.out.println(beanName + "执行postProcessAfterInitialization");
+        System.out.println(beanName + "执行内置Bean后置处理器postProcessAfterInitialization");
         return BeanPostProcessor.super.postProcessAfterInitialization(bean, beanName);
     }
 }
