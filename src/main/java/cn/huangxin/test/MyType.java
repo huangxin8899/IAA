@@ -33,4 +33,8 @@ public class MyType implements BeanNameAware, InitializingBean {
     public void afterPropertiesSet() {
         System.out.println(beanName + "执行初始化方法");
     }
+
+    public void aopTest() {
+        System.out.println("MyType执行aopTest");
+    }
 }

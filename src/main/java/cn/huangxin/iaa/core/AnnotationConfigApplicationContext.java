@@ -9,11 +9,9 @@ import cn.huangxin.iaa.util.FileUtil;
 import java.beans.Introspector;
 import java.io.File;
 import java.lang.reflect.*;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * @author 黄鑫
@@ -127,9 +125,9 @@ public class AnnotationConfigApplicationContext {
 
     private void registerCommonBeanPostProcessor() {
         BeanDefinition beanDefinition = new BeanDefinition();
-        beanDefinition.setType(AnnotationBeanPostProcessor.class);
+        beanDefinition.setType(AspectBeanPostProcessor.class);
         beanDefinition.setScope("singleton");
-        String beanName = Introspector.decapitalize(AnnotationBeanPostProcessor.class.getSimpleName());
+        String beanName = Introspector.decapitalize(AspectBeanPostProcessor.class.getSimpleName());
         beanDefinitionMap.put(beanName, beanDefinition);
     }
 
@@ -162,6 +160,11 @@ public class AnnotationConfigApplicationContext {
             // 多例
             return createBean(beanName, beanDefinition);
         }
+    }
+
+    public Object getBean(Class<?> beanClass) {
+        String name = Introspector.decapitalize(beanClass.getSimpleName());
+        return getBean(name);
     }
 
     private Object createBean(String beanName, BeanDefinition beanDefinition) {
@@ -250,6 +253,9 @@ public class AnnotationConfigApplicationContext {
         if (bean instanceof BeanNameAware) {
             ((BeanNameAware) bean).setBeanName(beanName);
         }
+        if (bean instanceof ApplicationContextAware) {
+            ((ApplicationContextAware) bean).setApplicationContext(this);
+        }
 
         // 初始化前
         for (BeanPostProcessor beanPostProcessor : beanPostProcessorList) {
@@ -285,5 +291,13 @@ public class AnnotationConfigApplicationContext {
             }
         }
         return singletonObject;
+    }
+
+    public List<Class<?>> getAllBeanClass() {
+        return this.beanDefinitionMap
+                .values()
+                .stream()
+                .map(BeanDefinition::getType)
+                .collect(Collectors.toList());
     }
 }
