@@ -61,6 +61,7 @@ public class AnnotationConfigApplicationContext {
 
     /**
      * 扫描被注解标记的bean -> 生成BeanDefinition放到beanDefinitionMap
+     *
      * @param configClass
      */
     private void scanBeanDefinition(Class<?> configClass) {
@@ -125,9 +126,9 @@ public class AnnotationConfigApplicationContext {
 
     private void registerCommonBeanPostProcessor() {
         BeanDefinition beanDefinition = new BeanDefinition();
-        beanDefinition.setType(AspectBeanPostProcessor.class);
+        beanDefinition.setType(AnnotationAwareAspectJAutoProxyCreator.class);
         beanDefinition.setScope("singleton");
-        String beanName = Introspector.decapitalize(AspectBeanPostProcessor.class.getSimpleName());
+        String beanName = Introspector.decapitalize(AnnotationAwareAspectJAutoProxyCreator.class.getSimpleName());
         beanDefinitionMap.put(beanName, beanDefinition);
     }
 
@@ -173,7 +174,19 @@ public class AnnotationConfigApplicationContext {
             Object bean = createBeanInstance(beanDefinition);
             // 若是单例模式，将ObjectFactory放到三级缓存
             if (beanDefinition.isSingleton()) {
-                this.singletonFactories.put(beanName, new DefaultSingletonFactory(bean));
+                this.singletonFactories.put(beanName, new ObjectFactory<Object>() {
+                    // 若出现循环依赖，则提前创建bean代理对象
+                    @Override
+                    public Object getObject() throws RuntimeException {
+                        Object exposedObject = bean;
+                        for (BeanPostProcessor beanPostProcessor : AnnotationConfigApplicationContext.this.beanPostProcessorList) {
+                            if (beanPostProcessor instanceof AnnotationAwareAspectJAutoProxyCreator) {
+                                exposedObject = ((AnnotationAwareAspectJAutoProxyCreator) beanPostProcessor).getEarlyBeanReference(bean, beanName);
+                            }
+                        }
+                        return exposedObject;
+                    }
+                });
             }
             // 依赖注入
             populateBean(beanDefinition, bean);
@@ -299,5 +312,16 @@ public class AnnotationConfigApplicationContext {
                 .stream()
                 .map(BeanDefinition::getType)
                 .collect(Collectors.toList());
+    }
+
+    public void close() {
+        destroySingletons();
+    }
+
+    private void destroySingletons() {
+        // Clear all cached singleton instances in this registry.
+        this.singletonObjects.clear();
+        this.earlySingletonObjects.clear();
+        this.singletonFactories.clear();
     }
 }
