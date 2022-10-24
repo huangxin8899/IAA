@@ -12,6 +12,8 @@ public class Test {
 
     public static void main(String[] args) {
         AnnotationConfigApplicationContext applicationContext = new AnnotationConfigApplicationContext(AppConfig.class);
+        System.out.println(applicationContext.getBean("testScope"));
+        System.out.println(applicationContext.getBean("testScope"));
         MyType myType = (MyType) applicationContext.getBean("myType");
         myType.aopTest();
     }

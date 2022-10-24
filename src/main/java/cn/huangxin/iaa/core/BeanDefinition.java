@@ -10,7 +10,7 @@ public class BeanDefinition {
     private String scope;
 
     public boolean isSingleton() {
-        return "singleton".equals(scope);
+        return ScopeType.SINGLETON.equals(scope);
     }
 
     public Class<?> getType() {

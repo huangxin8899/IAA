@@ -98,7 +98,8 @@ public class AnnotationConfigApplicationContext {
                                 Scope scope = aClass.getDeclaredAnnotation(Scope.class);
                                 beanDefinition.setScope(scope.value());
                             } else {
-                                beanDefinition.setScope("singleton");
+                                // 默认单例
+                                beanDefinition.setScope(ScopeType.SINGLETON);
                             }
                             this.beanDefinitionMap.put(beanName, beanDefinition);
                         }
@@ -127,7 +128,7 @@ public class AnnotationConfigApplicationContext {
     private void registerCommonBeanPostProcessor() {
         BeanDefinition beanDefinition = new BeanDefinition();
         beanDefinition.setType(AnnotationAwareAspectJAutoProxyCreator.class);
-        beanDefinition.setScope("singleton");
+        beanDefinition.setScope(ScopeType.SINGLETON);
         String beanName = Introspector.decapitalize(AnnotationAwareAspectJAutoProxyCreator.class.getSimpleName());
         beanDefinitionMap.put(beanName, beanDefinition);
     }
